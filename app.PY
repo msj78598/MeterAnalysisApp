@@ -1,5 +1,6 @@
+import streamlit as st
 import pandas as pd
-import gradio as gr
+from io import BytesIO
 
 def process_file(file, min_average):
     # قراءة ملف الاكسل
@@ -24,27 +25,25 @@ def process_file(file, min_average):
     # حساب عدد الحالات المكتشفة
     num_cases = len(anomaly)
 
-    # حفظ النتائج في ملف اكسل جديد
-    output_file = "anomalies_filtered.xlsx"
-    anomaly.to_excel(output_file, index=False)
+    return anomaly, num_cases
 
-    return anomaly, output_file, num_cases
+def to_excel(df):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Sheet1')
+    processed_data = output.getvalue()
+    return processed_data
 
-# إعداد واجهة المستخدم
-interface = gr.Interface(
-    fn=process_file,
-    inputs=[
-        gr.File(label="ارفع ملف الاكسل الخاص بالعدادات"),
-        gr.Number(label="حدد الحد الأدنى لقيمة المتوسط", value=0)
-    ],
-    outputs=[
-        gr.DataFrame(label="العدادات ذات القيم الغير طبيعية مرتبة حسب المتوسط"),
-        gr.File(label="تحميل الملف"),
-        gr.Number(label="عدد الحالات المكتشفة", interactive=False)
-    ],
-    title="تحليل أحمال العدادات لاكتشاف حالات الفاقد",
-    description="ارفع ملف الاكسل الذي يحتوي على رقم الساعة والامبير ليتم تحليلها وتحديد الحالات"
-)
+st.title("تحليل أحمال العدادات لاكتشاف حالات الفاقد")
 
-# تشغيل التطبيق
-interface.launch(share=True)
+uploaded_file = st.file_uploader("ارفع ملف الاكسل الخاص بالعدادات")
+min_avg = st.number_input("حدد الحد الأدنى لقيمة المتوسط", value=0)
+
+if uploaded_file is not None:
+    df, num_cases = process_file(uploaded_file, min_avg)
+    st.write(f"عدد الحالات المكتشفة: {num_cases}")
+    st.write(df)
+
+    # تحويل البيانات إلى ملف Excel وتنزيله
+    excel_data = to_excel(df)
+    st.download_button(label="تحميل النتائج كملف Excel", data=excel_data, file_name='anomalies_filtered.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
